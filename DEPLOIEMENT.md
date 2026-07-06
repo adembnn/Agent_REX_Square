@@ -1,11 +1,5 @@
 # Déploiement de l'agent REX
 
-## ⚠️ Confidentialité
-Les REX contiennent des **données clients sensibles** (noms, missions, montants).
-**Ne pas déployer sur un service public** (Streamlit Community Cloud, dépôt GitHub
-public, etc.) : les données seraient exposées. Tout déploiement doit rester
-**interne à Square** et être validé par la DSI / la conformité.
-
 ## Prérequis (une fois par machine)
 ```
 pip install -r requirements.txt
