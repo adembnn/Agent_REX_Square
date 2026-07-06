@@ -56,17 +56,25 @@ with st.sidebar:
 
 st.markdown("---")
 st.subheader("🖼️ Gestion des logos")
+if st.button("Chercher les logos manquants", use_container_width=True): 
+    status_text = st.empty()
+    progress_bar = st.progress(0)
+  
+     try:
+        # On passe les éléments visuels à la fonction pour qu'elle les anime
+        nb = telecharger_logos_manquants(chemin, progress_bar, status_text)
+            
+        # Une fois terminé, on efface le texte de chargement et on remplit la barre
+        status_text.empty()
+        progress_bar.empty()
+            
+        if nb > 0:
+            st.success(f"✅ {nb} nouveau(x) logo(s) téléchargé(s) !")
+        else:
+            st.info("👍 Tous les logos sont déjà à jour.")
+    except Exception as e:
+        st.error(f"Erreur lors de la récupération : {e}")
 
-if st.button("Chercher les logos manquants", use_container_width=True):
-    with st.spinner("Recherche des logos sur le web (cela peut prendre un moment)..."):
-        try:
-            nb = telecharger_logos_manquants(chemin)
-            if nb > 0:
-                st.success(f"✅ {nb} nouveau(x) logo(s) téléchargé(s) !")
-            else:
-                st.info("👍 Tous les logos sont déjà à jour.")
-        except Exception as e:
-            st.error(f"Erreur lors de la récupération : {e}")
 
 # ── Chargement des références ──
 if not os.path.exists(chemin):
