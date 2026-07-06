@@ -60,7 +60,7 @@ st.subheader("🖼️ Gestion des logos")
 if st.button("Chercher les logos manquants", use_container_width=True):
     with st.spinner("Recherche des logos sur le web (cela peut prendre un moment)..."):
         try:
-            nb = telecharger_logos_manquants()
+            nb = telecharger_logos_manquants(chemin)
             if nb > 0:
                 st.success(f"✅ {nb} nouveau(x) logo(s) téléchargé(s) !")
             else:
