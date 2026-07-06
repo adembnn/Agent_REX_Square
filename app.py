@@ -12,6 +12,7 @@ import tempfile
 import pandas as pd
 import streamlit as st
 
+from fetch_logos import telecharger_logos_manquants
 from src.extraction import charger_references, SECTEURS, TYPES_PRESTATION
 from src.matching import Categorie, lister_par_categorie, PALIERS_IA
 from src.generation import construire_deck, PERIM_ORDER
@@ -52,6 +53,19 @@ with st.sidebar:
     else:
         chemin = EXCEL_DEFAUT
         st.caption(f"Par défaut : `{EXCEL_DEFAUT}`")
+
+st.markdown("---")
+    st.subheader("🖼️ Gestion des logos")
+    if st.button("Chercher les logos manquants", use_container_width=True):
+        with st.spinner("Recherche des logos sur le web (cela peut prendre un moment)..."):
+            try:
+                nb = telecharger_logos_manquants()
+                if nb > 0:
+                    st.success(f"✅ {nb} nouveau(x) logo(s) téléchargé(s) !")
+                else:
+                    st.info("👍 Tous les logos sont déjà à jour.")
+            except Exception as e:
+                st.error(f"Erreur lors de la récupération : {e}")
 
 # ── Chargement des références ──
 if not os.path.exists(chemin):
