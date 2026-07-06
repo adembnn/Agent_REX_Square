@@ -171,8 +171,8 @@ def meilleur_logo(key, name, domain, existant=None):
     return best[1], best[2], detail
 
 
-def telecharger_logos_manquants(chemin_excel):
-    """Lit l'Excel, identifie les clients, et télécharge les logos manquants."""
+def telecharger_logos_manquants(chemin_excel, progress_bar=None, status_text=None):
+    """Lit l'Excel, identifie les clients, et télécharge les logos manquants avec progression."""
     os.makedirs(LOGO_DIR, exist_ok=True)
     
     # 1. Lecture dynamique du fichier Excel
@@ -183,14 +183,21 @@ def telecharger_logos_manquants(chemin_excel):
 
     # 2. Extraction des noms de clients uniques
     clients_uniques = set(ref.client for ref in references if ref.client)
-    
-    # 3. Création du dictionnaire de recherche dynamique
     search_dynamique = {str(client).lower().replace(" ", "_"): str(client) for client in clients_uniques}
     
     nb_telecharges = 0
+    total_clients = len(search_dynamique)
     
-    # 4. Boucle de vérification et de téléchargement
-    for key, name in search_dynamique.items():
+    # 3. Boucle de vérification avec enumerate (pour avoir le numéro de l'étape)
+    for index, (key, name) in enumerate(search_dynamique.items()):
+        
+        # --- NOUVEAUTÉ : Mise à jour de l'interface Streamlit ---
+        if status_text:
+            status_text.text(f"Recherche du logo pour : {name} ({index + 1}/{total_clients})")
+        if progress_bar:
+            progress_bar.progress((index + 1) / total_clients)
+        # --------------------------------------------------------
+
         dest = os.path.join(LOGO_DIR, key + ".png")
         
         if os.path.exists(dest) and not FORCE:
