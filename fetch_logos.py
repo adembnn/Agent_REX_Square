@@ -171,13 +171,13 @@ def meilleur_logo(key, name, domain, existant=None):
     return best[1], best[2], detail
 
 
-def telecharger_logos_manquants():
+def telecharger_logos_manquants(chemin_excel):
     """Lit l'Excel, identifie les clients, et télécharge les logos manquants."""
     os.makedirs(LOGO_DIR, exist_ok=True)
     
     # 1. Lecture dynamique du fichier Excel
     try:
-        references = charger_references()
+        references = charger_references(chemin_excel)
     except Exception as e:
         raise Exception(f"Impossible de lire l'Excel pour les logos : {e}")
 
