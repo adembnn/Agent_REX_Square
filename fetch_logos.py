@@ -16,6 +16,7 @@ Lancer :  python fetch_logos.py         (saute les logos déjà présents)
           python fetch_logos.py force   (re-télécharge tout)
 """
 import urllib.parse, urllib.request, json, os, sys, time
+from src.extraction import charger_references
 from io import BytesIO
 from PIL import Image, ImageChops
 
