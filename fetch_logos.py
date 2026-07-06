@@ -170,32 +170,48 @@ def meilleur_logo(key, name, domain, existant=None):
     return best[1], best[2], detail
 
 
-if __name__ == "__main__":
+def telecharger_logos_manquants():
+    """Lit l'Excel, identifie les clients, et télécharge les logos manquants."""
     os.makedirs(LOGO_DIR, exist_ok=True)
-    for key, name in SEARCH.items():
+    
+    # 1. Lecture dynamique du fichier Excel
+    try:
+        references = charger_references()
+    except Exception as e:
+        raise Exception(f"Impossible de lire l'Excel pour les logos : {e}")
+
+    # 2. Extraction des noms de clients uniques
+    clients_uniques = set(ref.client for ref in references if ref.client)
+    
+    # 3. Création du dictionnaire de recherche dynamique
+    search_dynamique = {str(client).lower().replace(" ", "_"): str(client) for client in clients_uniques}
+    
+    nb_telecharges = 0
+    
+    # 4. Boucle de vérification et de téléchargement
+    for key, name in search_dynamique.items():
         dest = os.path.join(LOGO_DIR, key + ".png")
+        
         if os.path.exists(dest) and not FORCE:
-            print(f"SKIP {key}")
             continue
+            
         existant = None
         if os.path.exists(dest):
             with open(dest, "rb") as f:
                 existant = f.read()
+                
         try:
-            if key in COMMONS_FILE:               # fichier vérifié -> on le garde
-                data = _get(thumb_png(COMMONS_FILE[key]))
-                try:
-                    im, src, detail = Image.open(BytesIO(data)), "commons-file", []
-                    im.load()
-                except Exception:                 # échec -> on retombe sur la comparaison
-                    im, src, detail = meilleur_logo(key, name, DOMAINS.get(key), existant)
-            else:
-                im, src, detail = meilleur_logo(key, name, DOMAINS.get(key), existant)
+            im, src, detail = meilleur_logo(key, name, None, existant)
+            
             if im is None:
-                print(f"MISS {key:18} | {'  '.join(detail)}")
                 continue
-            _recadrer(im).save(dest)
-            print(f"OK   {key:18} <- {src:11} | {'  '.join(detail)}")
+                
+            _recadrer(im).save(dest, format="PNG")
+            nb_telecharges += 1
+            
         except Exception as e:
-            print(f"ERR  {key:18} {e}")
+            print(f"Erreur sur le logo {key} : {e}")
+            
         time.sleep(0.6)
+        
+    return nb_telecharges
