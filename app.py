@@ -59,8 +59,7 @@ st.subheader("🖼️ Gestion des logos")
 if st.button("Chercher les logos manquants", use_container_width=True): 
     status_text = st.empty()
     progress_bar = st.progress(0)
-  
-     try:
+    try:
         # On passe les éléments visuels à la fonction pour qu'elle les anime
         nb = telecharger_logos_manquants(chemin, progress_bar, status_text)
             
