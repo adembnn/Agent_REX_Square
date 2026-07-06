@@ -55,17 +55,18 @@ with st.sidebar:
         st.caption(f"Par défaut : `{EXCEL_DEFAUT}`")
 
 st.markdown("---")
-    st.subheader("🖼️ Gestion des logos")
-    if st.button("Chercher les logos manquants", use_container_width=True):
-        with st.spinner("Recherche des logos sur le web (cela peut prendre un moment)..."):
-            try:
-                nb = telecharger_logos_manquants()
-                if nb > 0:
-                    st.success(f"✅ {nb} nouveau(x) logo(s) téléchargé(s) !")
-                else:
-                    st.info("👍 Tous les logos sont déjà à jour.")
-            except Exception as e:
-                st.error(f"Erreur lors de la récupération : {e}")
+st.subheader("🖼️ Gestion des logos")
+
+if st.button("Chercher les logos manquants", use_container_width=True):
+    with st.spinner("Recherche des logos sur le web (cela peut prendre un moment)..."):
+        try:
+            nb = telecharger_logos_manquants()
+            if nb > 0:
+                st.success(f"✅ {nb} nouveau(x) logo(s) téléchargé(s) !")
+            else:
+                st.info("👍 Tous les logos sont déjà à jour.")
+        except Exception as e:
+            st.error(f"Erreur lors de la récupération : {e}")
 
 # ── Chargement des références ──
 if not os.path.exists(chemin):
