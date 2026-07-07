@@ -1,5 +1,5 @@
 """
-app.py — Interface Streamlit du générateur de REX Square Management.
+app.py — Interface Streamlit du générateur de REX IA Square Management.
 
 Lancer :  streamlit run app.py
 
@@ -20,10 +20,10 @@ from src.generation import construire_deck, PERIM_ORDER
 OR = "#BD8E42"
 EXCEL_DEFAUT = "data/references.xlsx"
 
-st.set_page_config(page_title="REX IA — Square Management", page_icon="📑", layout="wide")
+st.set_page_config(page_title="REX IA - Square Management", page_icon="📑", layout="wide")
 
 st.markdown(
-    f"<h1 style='margin-bottom:0'>Générateur de REX "
+    f"<h1 style='margin-bottom:0'>Générateur de REX IA "
     f"<span style='color:{OR}'>·</span> Square Management</h1>"
     "<p style='color:#807F7E;margin-top:4px'>Sélectionne les références IA les plus "
     "pertinentes et génère un PowerPoint prêt à présenter.</p>",
