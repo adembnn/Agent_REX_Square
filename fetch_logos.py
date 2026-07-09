@@ -2,13 +2,6 @@
 fetch_logos.py — Récupère le MEILLEUR logo de chaque marque en comparant
 plusieurs sources, puis l'enregistre (recadré) dans data/logos/.
 
-Sources interrogées (best-effort, sans clé API) :
-  1. Wikidata (propriété P154 "logo image")   [par nom]
-  2. Wikimedia Commons (recherche de fichier)  [par nom]
-  3. Wikipedia FR (image principale de page)   [par nom]
-  4. DuckDuckGo (favicon)                       [par domaine]
-  5. Google (favicon 256px)                     [par domaine]
-
 L'agent télécharge les candidats, les NOTE (résolution, transparence, pas un
 favicon minuscule, ratio raisonnable) et conserve le mieux noté.
 
