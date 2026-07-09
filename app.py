@@ -16,6 +16,7 @@ from fetch_logos import telecharger_logos_manquants
 from src.extraction import charger_references, SECTEURS, TYPES_PRESTATION
 from src.matching import Categorie, lister_par_categorie, PALIERS_IA
 from src.generation import construire_deck, PERIM_ORDER
+from src.logos import chemin_logo, est_anonymise
 
 OR = "#BD8E42"
 EXCEL_DEFAUT = "data/references.xlsx"
@@ -55,8 +56,16 @@ with st.sidebar:
         st.caption(f"Par défaut : `{EXCEL_DEFAUT}`")
 
 st.markdown("---")
-st.subheader("🖼️ Gestion des logos")
-if st.button("Chercher les logos manquants", use_container_width=True): 
+try:
+    _clients_logos = {r.client for r in _charger(chemin, os.path.getmtime(chemin)) if r.client}
+    _manquants = sorted(c for c in _clients_logos
+                        if not est_anonymise(c) and chemin_logo(c) is None)
+    st.subheader(f"🖼️ Gestion des logos (nombre de logo manquant : {len(_manquants)})")
+    if _manquants:
+        st.caption("Sans logo sur les slides : " + ", ".join(_manquants))
+except Exception:
+    st.subheader("🖼️ Gestion des logos")
+if st.button("Chercher les logos manquants", use_container_width=True):
     status_text = st.empty()
     progress_bar = st.progress(0)
     try:
@@ -101,7 +110,6 @@ with st.sidebar:
 
     types = _cases("Périmètre (domaine)", PERIM_ORDER, "perim")
     types_prest = _cases("Type de prestation", TYPES_PRESTATION, "type")
-    genai_only = st.toggle("Uniquement IA générative")
 
     # pertinence IA (si le fichier contient la colonne Indice IA)
     paliers_dispo = [p for p in PALIERS_IA if any(r.pertinence_ia == p for r in refs)]
@@ -124,7 +132,7 @@ secteur = {
 tp = types_prest if 0 < len(types_prest) < len(TYPES_PRESTATION) else []
 cat = Categorie(
     theme="IA", secteur=secteur, secteurs=secteurs_choisis, perimetres=types,
-    types_prestation=tp, genai_only=genai_only, paliers_ia=paliers_choisis,
+    types_prestation=tp, paliers_ia=paliers_choisis,
     inclure_pertinence_inconnue=inclure_inconnue,
     exiger_theme=False, exiger_secteur=bool(secteur),
 )
@@ -141,10 +149,9 @@ for r in selection:
     ligne = {"Inclure": True, "Client": r.client, "Secteur": r.secteur,
              "Périmètre": r.perimetre or "—", "Prestation": r.type_mission or "—"}
     if a_pertinence:
-        ligne["Pertinence IA"] = r.pertinence_ia or "—"
         ligne["Score"] = r.score_ia
-    ligne["GenAI"] = "✓" if r.genai else ""
-    ligne["Année"] = r.annee
+    ligne["Date de début"] = r.annee
+    ligne["Date de fin"] = r.annee_fin
     lignes.append(ligne)
 
 edited = st.data_editor(
@@ -154,10 +161,9 @@ edited = st.data_editor(
 )
 selection_finale = [r for r, inc in zip(selection, edited["Inclure"]) if inc]
 
-c1, c2, c3 = st.columns(3)
+c1, c2 = st.columns(2)
 c1.metric("Incluses dans le deck", len(selection_finale))
 c2.metric("Secteurs", len({r.secteur for r in selection_finale}))
-c3.metric("IA générative", sum(1 for r in selection_finale if r.genai))
 
 # ── Génération ──
 st.subheader("Génération")

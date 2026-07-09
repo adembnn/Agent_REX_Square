@@ -15,12 +15,13 @@ favicon minuscule, ratio raisonnable) et conserve le mieux noté.
 Lancer :  python fetch_logos.py         (saute les logos déjà présents)
           python fetch_logos.py force   (re-télécharge tout)
 """
-import urllib.parse, urllib.request, json, os, sys, time
+import urllib.parse, urllib.request, json, os, re, sys, time
 from src.extraction import charger_references
 from io import BytesIO
 from PIL import Image, ImageChops
 
-from src.logos import SEARCH, KNOWN_QID, COMMONS_FILE, DOMAINS, LOGO_DIR
+from src.logos import (SEARCH, KNOWN_QID, COMMONS_FILE, DOMAINS, LOGO_DIR,
+                       resoudre, est_anonymise, chemin_logo)
 
 UA = {"User-Agent": "SquareREXAgent/1.0 (stage; contact intern)"}
 FORCE = "force" in sys.argv
@@ -44,7 +45,7 @@ def _json(url: str):
     return json.loads(data) if data else {}
 
 
-# ── Helpers Wikidata / Commons ──────────────────────────────────────────────
+# ── Helpers Wikidata ────────────────────────────────────────────────────────
 def qid(name):
     d = _json("https://www.wikidata.org/w/api.php?action=wbsearchentities"
               f"&search={urllib.parse.quote(name)}&language=fr&format=json&limit=1")
@@ -66,43 +67,134 @@ def thumb_png(filename, width=512):
     return (ii[0].get("thumburl") or ii[0].get("url")) if ii else None
 
 
-def commons_file(name):
-    d = _json("https://commons.wikimedia.org/w/api.php?action=query&list=search"
-              f"&srsearch={urllib.parse.quote(name + ' logo')}&srnamespace=6&format=json&srlimit=8")
-    for r in d.get("query", {}).get("search", []):
-        t = r["title"].split("File:", 1)[-1]
-        if t.lower().endswith((".svg", ".png")):
-            return t
-    return None
+def _domaines(name, key=None):
+    """Domaines web candidats de la marque, TOUS découverts automatiquement :
+    override manuel (DOMAINS) -> site officiel déclaré sur Wikidata (P856) ->
+    devinette `marque.fr`/`.com`/`.eu` à partir du nom. Aucune saisie au cas
+    par cas : c'est le générateur de slides qui décide via la notation."""
+    if key and DOMAINS.get(key):
+        return [DOMAINS[key]]
+    q = (KNOWN_QID.get(key) if key else None) or qid(name)
+    if q:
+        claims = _json("https://www.wikidata.org/w/api.php?action=wbgetclaims"
+                       f"&entity={q}&property=P856&format=json").get("claims", {}).get("P856")
+        if claims:
+            try:
+                host = urllib.parse.urlparse(claims[0]["mainsnak"]["datavalue"]["value"]).netloc.lower()
+                return [host[4:] if host.startswith("www.") else host]
+            except Exception:
+                pass
+    # Aucun site officiel connu -> devinette sur le mot de marque le plus long.
+    mots = sorted(_toks(name) - _STOP, key=len, reverse=True)
+    return [f"{mots[0]}.fr", f"{mots[0]}.com", f"{mots[0]}.eu"] if mots else []
 
 
-# ── Les 5 sources : renvoient des octets d'image (ou None) ──────────────────
-def src_wikidata(key, name, domain):
+# ── Normalisation pour le matching de pertinence (seeklogo) ─────────────────
+def _norm(t):
+    import unicodedata
+    t = unicodedata.normalize("NFKD", (t or "").lower())
+    return "".join(c for c in t if not unicodedata.combining(c))
+
+
+def _toks(t, minlen=3):
+    return {w for w in re.findall(r"[a-z0-9]+", _norm(t)) if len(w) >= minlen}
+
+
+# Mots trop génériques pour identifier une marque (évite les faux positifs).
+_STOP = {"groupe", "group", "france", "assurance", "assurances", "banque",
+         "bank", "holding", "compagnie", "societe", "international", "the",
+         "sa", "sas", "gie"}
+
+
+# ── Sources de logos (les meilleures : logos officiels, pas des favicons) ────
+def src_wikidata(key, name, domaines):
+    """Logo officiel de la fiche Wikidata (P154) — vectoriel/transparent, HD."""
     q = KNOWN_QID.get(key) or qid(name)
     fn = logo_file(q) if q else None
     return _get(thumb_png(fn)) if fn else None
 
 
-def src_commons(key, name, domain):
-    fn = commons_file(name)
-    return _get(thumb_png(fn)) if fn else None
+def _icones_du_site(domain):
+    """URLs de logo déclarées sur la page d'accueil : apple-touch-icon (souvent
+    le logo de marque transparent) puis og:image, en absolu."""
+    for base in (f"https://www.{domain}", f"https://{domain}"):
+        html = _get(base)
+        if not html:
+            continue
+        html = html.decode("utf-8", "ignore")
+        urls = []
+        for balise in re.findall(r"<link[^>]+apple-touch-icon[^>]*>", html, re.I):
+            h = re.search(r'href=["\']([^"\']+)', balise)
+            if h:
+                urls.append(h.group(1))
+        for balise in re.findall(r'<meta[^>]+og:image[^>]*>', html, re.I):
+            h = re.search(r'content=["\']([^"\']+)', balise)
+            if h:
+                urls.append(h.group(1))
+        return [urllib.parse.urljoin(base + "/", u) for u in urls]
+    return []
 
 
-def src_iconhorse(key, name, domain):
-    return _get(f"https://icon.horse/icon/{domain}") if domain else None
+def src_site(key, name, domaines):
+    """Meilleure icône déclarée par le site officiel (PNG transparent 180-300px).
+    Les domaines candidats sont fournis automatiquement par `_domaines`."""
+    best, best_sc = None, 0.0
+    for domain in (domaines or [])[:3]:
+        for u in _icones_du_site(domain)[:6]:
+            data = _get(u)
+            if not data:
+                continue
+            sc, _ = _qualite(data)
+            if sc > best_sc:
+                best, best_sc = data, sc
+        if best is not None:                       # 1er domaine qui répond suffit
+            break
+    return best
 
 
-def src_ddg(key, name, domain):
-    return _get(f"https://icons.duckduckgo.com/ip3/{domain}.ico") if domain else None
+def src_seeklogo(key, name, domaines):
+    """seeklogo.com : bibliothèque de logos d'entreprise (PNG transparents).
+    Pas d'API -> on lit la page de recherche et on FILTRE par pertinence sur le
+    nom de marque (sinon on récupère un homonyme / une déclinaison régionale)."""
+    html = _get("https://seeklogo.com/search?q=" + urllib.parse.quote(name))
+    if not html:
+        return None
+    html = html.decode("utf-8", "ignore")
+    qd = _toks(name) - _STOP                       # tokens distinctifs (>= 3 lettres)
+    qfull = _toks(name, 2)                          # tous les tokens (pour départager)
+    if not qd:
+        return None
+    best, seen = None, set()
+    for u in re.findall(r'https://images\.seeklogo\.com/logo-png/[^\s"\'<>]+\.png', html):
+        if u in seen:
+            continue
+        seen.add(u)
+        m = re.search(r'/([a-z0-9\-]+)-logo-png_seeklogo', u)
+        stoks = _toks(m.group(1), 2) if m else set()
+        rel = len(qd & stoks)                      # nb de tokens de marque retrouvés
+        if rel == 0:                               # pas le bon logo -> on écarte
+            continue
+        data = _get(u)
+        if not data:
+            continue
+        sc, im = _qualite(data)
+        if im is None:
+            continue
+        foreign = len(stoks - qfull)               # mots parasites (ex. axa-'sigorta')
+        rank = (rel, -foreign, sc)                 # + pertinent, - parasites, + net
+        if best is None or rank > best[0]:
+            best = (rank, data)
+    return best[1] if best else None
 
 
-def src_google(key, name, domain):
-    return _get(f"https://www.google.com/s2/favicons?domain={domain}&sz=256") if domain else None
-
-
-# NB : pas de Wikipedia "pageimage" -> renvoie souvent une PHOTO (siège), pas le logo.
-SOURCES = [("wikidata", src_wikidata), ("commons", src_commons),
-           ("iconhorse", src_iconhorse), ("ddg", src_ddg), ("google", src_google)]
+# Sources par ORDRE DE FIABILITÉ (autorité de la marque) :
+#   1. Wikidata P154  : logo officiel vectoriel/transparent
+#   2. Site officiel  : apple-touch-icon = logo courant, garanti = la bonne société
+#   3. seeklogo       : grande bibliothèque, mais AMBIGUË sur les noms courts
+#                       (homonymes, versions périmées) -> uniquement en dernier recours
+# On prend la 1re source qui renvoie un logo « assez bon » (cf. SEUIL_OK).
+SOURCES = [("wikidata", src_wikidata), ("site", src_site), ("seeklogo", src_seeklogo)]
+SEUIL_OK = 60_000        # score mini pour valider une source sans essayer les suivantes
 
 
 # ── Notation qualité d'un candidat ──────────────────────────────────────────
@@ -146,80 +238,85 @@ def _recadrer(im):
     return im
 
 
-def meilleur_logo(key, name, domain, existant=None):
-    """Interroge toutes les sources (+ le logo actuel comme candidat), note les
-    candidats, renvoie le meilleur. Le logo actuel garantit qu'on ne dégrade
-    jamais vers un favicon si une source échoue transitoirement."""
-    best = (0.0, None, None)      # score, image, source
+def meilleur_logo(key, name, existant=None):
+    """Parcourt les sources par ordre de fiabilité et renvoie le logo de la 1re
+    source qui dépasse SEUIL_OK ; sinon la meilleure image trouvée ; sinon le
+    logo actuel. Domaines (pour `site`) découverts automatiquement via Wikidata."""
+    domaines = _domaines(name, key)
+    fallback = (0.0, None, None)      # meilleure image si aucune source n'atteint le seuil
     detail = []
-    if existant:
-        sc, im = _qualite(existant)
-        if sc > 0:
-            best = (sc, im, "actuel"); detail.append(f"actuel={int(sc)}")
     for nom, fn in SOURCES:
         try:
-            data = fn(key, name, domain)
+            data = fn(key, name, domaines)
         except Exception:
             data = None
         if not data:
             detail.append(f"{nom}=∅"); continue
         sc, im = _qualite(data)
         detail.append(f"{nom}={int(sc) if sc > 0 else '✗'}")
-        if sc > best[0]:
-            best = (sc, im, nom)
+        if im is not None and sc > fallback[0]:
+            fallback = (sc, im, nom)
+        if im is not None and sc >= SEUIL_OK:        # source fiable suffisante -> stop
+            return im, nom, detail
         time.sleep(0.3)
-    return best[1], best[2], detail
+    if fallback[1] is None and existant:             # aucune source -> garder l'actuel
+        sc, im = _qualite(existant)
+        if sc > 0:
+            return im, "actuel", detail
+    return fallback[1], fallback[2], detail
 
 
 def telecharger_logos_manquants(chemin_excel, progress_bar=None, status_text=None):
-    """Lit l'Excel, identifie les clients, et télécharge les logos manquants avec progression."""
+    """Télécharge UNIQUEMENT les logos qui manquent sur les slides.
+
+    On cible exactement les clients affichés dans « sans logo sur les slides »
+    (vraie marque + aucun fichier logo), et on enregistre chaque logo sous la
+    clé canonique `resoudre(client)` — la même que lit le générateur de slides.
+    En mode `force`, on re-télécharge aussi les logos déjà présents.
+    """
     os.makedirs(LOGO_DIR, exist_ok=True)
-    
+
     # 1. Lecture dynamique du fichier Excel
     try:
         references = charger_references(chemin_excel)
     except Exception as e:
         raise Exception(f"Impossible de lire l'Excel pour les logos : {e}")
 
-    # 2. Extraction des noms de clients uniques
-    clients_uniques = set(ref.client for ref in references if ref.client)
-    search_dynamique = {str(client).lower().replace(" ", "_"): str(client) for client in clients_uniques}
-    
-    nb_telecharges = 0
-    total_clients = len(search_dynamique)
-    
-    # 3. Boucle de vérification avec enumerate (pour avoir le numéro de l'étape)
-    for index, (key, name) in enumerate(search_dynamique.items()):
-        
-        # --- NOUVEAUTÉ : Mise à jour de l'interface Streamlit ---
-        if status_text:
-            status_text.text(f"Recherche du logo pour : {name} ({index + 1}/{total_clients})")
-        if progress_bar:
-            progress_bar.progress((index + 1) / total_clients)
-        # --------------------------------------------------------
+    # 2. Cibler les clients concernés (on ignore les libellés anonymisés).
+    cibles = sorted({ref.client for ref in references
+                     if ref.client and not est_anonymise(ref.client)})
+    if not FORCE:                                    # par défaut : les manquants seuls
+        cibles = [c for c in cibles if chemin_logo(c) is None]
 
-        dest = os.path.join(LOGO_DIR, key + ".png")
-        
-        if os.path.exists(dest) and not FORCE:
+    nb_telecharges = 0
+    total = len(cibles)
+
+    # 3. Boucle sur les seuls clients à traiter
+    for index, name in enumerate(cibles):
+        if status_text:
+            status_text.text(f"Recherche du logo pour : {name} ({index + 1}/{total})")
+        if progress_bar:
+            progress_bar.progress((index + 1) / total if total else 1.0)
+
+        key = resoudre(name)                         # clé partagée avec les slides
+        if not key:
             continue
-            
+        dest = os.path.join(LOGO_DIR, key + ".png")
+
         existant = None
         if os.path.exists(dest):
             with open(dest, "rb") as f:
                 existant = f.read()
-                
+
         try:
-            im, src, detail = meilleur_logo(key, name, None, existant)
-            
+            im, src, detail = meilleur_logo(key, name, existant)
             if im is None:
                 continue
-                
             _recadrer(im).save(dest, format="PNG")
             nb_telecharges += 1
-            
         except Exception as e:
             print(f"Erreur sur le logo {key} : {e}")
-            
+
         time.sleep(0.6)
-        
+
     return nb_telecharges

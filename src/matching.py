@@ -45,7 +45,6 @@ class Categorie:
     exiger_secteur: bool = True                          # le secteur est-il obligatoire ?
     secteurs: list[str] = field(default_factory=list)    # secteurs précis (match exact, logique OU)
     types_prestation: list[str] = field(default_factory=list)  # ex. ["Pilotage", "Data Science"]
-    genai_only: bool = False                             # ne garder que les missions IA générative
     paliers_ia: list[str] = field(default_factory=list)  # paliers de pertinence IA retenus (match exact)
     inclure_pertinence_inconnue: bool = True             # garder les réfs sans palier renseigné
 
@@ -117,9 +116,6 @@ def _appartient(ref: Reference, cat: Categorie) -> bool:
     texte = _texte_ref(ref)
 
     if cat.exiger_theme and cat.theme and not _match_mots(cat.theme, texte):
-        return False
-
-    if cat.genai_only and not ref.genai:
         return False
 
     # pertinence IA (palier). Les réfs sans palier ("on ne sait pas") sont

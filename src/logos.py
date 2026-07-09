@@ -9,11 +9,19 @@ logos.py — Résolution centralisée client -> fichier logo.
 """
 from __future__ import annotations
 import os
+import re
 import unicodedata
 
 
 def _sans_accents(texte: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKD", texte) if not unicodedata.combining(c))
+
+
+def _slug(client: str) -> str:
+    """Nom de fichier canonique déduit du nom du client : sans accents,
+    minuscule, séparateurs -> '_'. Ex. 'ABEILLE ASSURANCES' -> 'abeille_assurances'."""
+    c = _sans_accents((client or "").lower().strip())
+    return re.sub(r"[^a-z0-9]+", "_", c).strip("_")
 
 LOGO_DIR = "data/logos"
 
@@ -21,7 +29,7 @@ _MAP = [
     (("la banque postale",),                  "la_banque_postale"),
     (("societe generale", "sg bddf"),         "societe_generale"),
     (("bnp",),                                "bnp_paribas"),
-    (("credit agricole", "cal&f"),            "credit_agricole"),
+    (("credit agricole", "cal&f", "cacib", "ca cib"), "credit_agricole"),
     (("bpce",),                               "bpce"),
     (("natixis",),                            "natixis"),
     (("axa",),                                "axa"),
@@ -29,6 +37,8 @@ _MAP = [
     (("baloise",),                            "baloise"),
     (("groupama",),                           "groupama"),
     (("carmignac",),                          "carmignac"),
+    (("amundi",),                             "amundi"),
+    (("covea", "gmf"),                        "covea"),
     (("coface",),                             "coface"),
     (("l'oreal", "l’oreal", "loreal"),        "loreal"),
     (("moet hennessy",),                      "moet_hennessy"),
@@ -91,6 +101,8 @@ SEARCH = {
     "baloise":           "Baloise",
     "groupama":          "Groupama",
     "carmignac":         "Carmignac",
+    "amundi":            "Amundi",
+    "covea":             "Covéa",
     "coface":            "Coface",
     "loreal":            "L'Oréal",
     # moet_hennessy : pas sur Wikidata/Commons -> logo fourni manuellement
@@ -168,6 +180,7 @@ KNOWN_QID = {
     "la_banque_postale": "Q3206431", "natixis": "Q571156", "axa": "Q160054",
     "allianz": "Q487292", "baloise": "Q457912", "groupama": "Q3083531",
     "coface": "Q658635", "loreal": "Q156077", "lvmh": "Q504998", "engie": "Q13416787",
+    "amundi": "Q2844522", "covea": "Q3001845",
     "fdj": "Q1450805", "capgemini": "Q1034621", "arquus": "Q3425100",
     "scale_ai": "Q112629176", "chicago_pneumatic": "Q4036103", "bonn": "Q152171",
     "sncf": "Q93090957", "ferrero": "Q21493848",
@@ -179,14 +192,36 @@ COMMONS_FILE = {"dior": "Dior Logo.svg", "tdf": "TDF (Unternehmen) logo.svg",
                 "valeo": "Valeo Logo.svg", "sncf": "200914 LOGO SNCF GC RGB.png"}
 
 
+# Libellés "clients" qui ne désignent aucune marque : missions anonymisées,
+# regroupements ("Partenaires multiples") ou artefacts de données ("NaT").
+# On ne les compte pas comme "logo manquant" (aucun logo n'est attendu).
+_ANON_MARKERS = ("confidentiel", "anonym", "partenaires multiples",
+                 "multiples", "divers", "plusieurs", "pluralisme")
+
+
+def est_anonymise(client: str) -> bool:
+    """True si le libellé n'est pas une vraie marque (mission anonymisée,
+    regroupement ou cellule vide/parasite) — donc jamais de logo attendu."""
+    c = _sans_accents((client or "").lower().strip())
+    if c in ("", "nat", "nan", "n/a", "na", "-", "–", "—"):
+        return True
+    return any(m in c for m in _ANON_MARKERS)
+
+
 def resoudre(client: str) -> str | None:
+    """Client -> clé de logo (= nom de fichier sans extension). `_MAP` fusionne
+    les variantes d'une même marque (toutes les 'BNP …' -> 'bnp_paribas') ;
+    sinon on retombe sur le slug du nom. Cette clé est partagée par le
+    téléchargeur (fetch_logos) ET le générateur de slides — un seul système."""
+    if est_anonymise(client):
+        return None
     c = _sans_accents((client or "").lower().strip())
     if c in ("sg", "sg bddf"):
         return "societe_generale"
     for subs, key in _MAP:
         if any(s in c for s in subs):
             return key
-    return None
+    return _slug(client)                      # fallback : slug du nom complet
 
 
 def chemin_logo(client: str) -> str | None:

@@ -202,7 +202,8 @@ def charger_references(chemin: str = "data/references.xlsx") -> list[Reference]:
 
     for _, row in df.iterrows():
         client = str(row.get("client", "")).strip()
-        if not client or client.lower() in ("nan", "interne", "square management"):
+        # "nan"/"nat" = cellule vide lue par pandas (ligne blanche/parasite) -> ignorée.
+        if not client or client.lower() in ("nan", "nat", "interne", "square management"):
             continue
 
         # périmètre & type DÉDUITS par mots-clés (on n'utilise plus AXE 1/2)

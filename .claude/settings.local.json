@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/adem.banni_square-ma/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/e735a34a-df52-4bb7-b696-c9e2be5e992d/9ce558bd-68f5-4e3f-8265-abaa1f8f45f3/skills/pptx/**)",
+      "Read(//c/Users/adem.banni_square-ma/Downloads/**)",
+      "Bash(echo \"exit: $?\")",
+      "Read(//c/Users/adem.banni_square-ma/AppData/Local/Temp/claude/C--Users-adem-banni-square-ma-Documents-Data---IA-REX-AI-Agent/2cf8623f-d50a-4218-97bc-df918b5681fa/scratchpad/**)",
+      "Bash(rm -rf casa)",
+      "Bash(mkdir casa *)",
+      "Bash(unzip -q \"C:/Users/adem.banni_square-ma/Downloads/time CASA 2023 pour exemple.pptx\" -d casa)",
+      "Bash(PYTHONUTF8=1 python -c ' *)"
+    ]
+  }
+}
