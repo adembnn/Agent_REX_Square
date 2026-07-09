@@ -224,9 +224,23 @@ def resoudre(client: str) -> str | None:
     return _slug(client)                      # fallback : slug du nom complet
 
 
+def _index_fichiers() -> dict[str, str]:
+    """Index {nom_fichier_minuscule: nom_fichier_reel} de LOGO_DIR.
+
+    Nécessaire car `resoudre()` produit toujours une clé en minuscule, mais
+    Windows (insensible à la casse) laisse passer un fichier réel mal nommé
+    (ex. 'Abilicor.png') alors que Streamlit Cloud tourne sur Linux
+    (sensible à la casse) et ne le trouverait pas. On matche donc ici
+    manuellement en minuscule plutôt que de compter sur l'OS."""
+    try:
+        return {f.lower(): f for f in os.listdir(LOGO_DIR)}
+    except FileNotFoundError:
+        return {}
+
+
 def chemin_logo(client: str) -> str | None:
     key = resoudre(client)
     if not key:
         return None
-    p = os.path.join(LOGO_DIR, key + ".png")
-    return p if os.path.exists(p) else None
+    nom_reel = _index_fichiers().get(key.lower() + ".png")
+    return os.path.join(LOGO_DIR, nom_reel) if nom_reel else None
